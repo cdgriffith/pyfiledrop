@@ -211,6 +211,7 @@ def download(dz_uuid):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", type=int, default=16273, required=False)
+    parser.add_argument("--host", type=str, default="0.0.0.0", required=False)
     parser.add_argument("-s", "--storage", type=str, default=str(storage_path), required=False)
     parser.add_argument("-c", "--chunks", type=str, default=str(chunk_path), required=False)
     parser.add_argument(
@@ -274,4 +275,4 @@ Storage Path: {storage_path.absolute()}
 Chunk Path: {chunk_path.absolute()}
 """
     )
-    run(server="paste", port=args.port)
+    run(server="paste", port=args.port, host=args.host)
