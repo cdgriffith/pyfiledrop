@@ -6,13 +6,15 @@ from collections import defaultdict
 import shutil
 import argparse
 import uuid
+import zlib
 
-from bottle import route, run, request, error, response, HTTPError
+from bottle import route, run, request, error, response, HTTPError, static_file
 from werkzeug.utils import secure_filename
 
 storage_path: Path = Path(__file__).parent / "storage"
 chunk_path: Path = Path(__file__).parent / "chunk"
 
+allow_downloads = False
 dropzone_cdn = "https://cdnjs.cloudflare.com/ajax/libs/dropzone"
 dropzone_version = "5.7.6"
 dropzone_timeout = "120000"
@@ -42,35 +44,112 @@ def index():
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/min/dropzone.min.css"/>
-    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/min/basic.min.css"/>
+    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/dropzone.css"/>
+    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/basic.css"/>
     <script type="application/javascript"
-        src="{dropzone_cdn.rstrip('/')}/{dropzone_version}/min/dropzone.min.js">
+        src="{dropzone_cdn.rstrip('/')}/{dropzone_version}/dropzone.js">
     </script>
     <title>pyfiledrop</title>
 </head>
 <body>
-    <div id="content">
+
+    <div id="content" style="width: 800px; margin: 0 auto;">
+        <h2>Upload new files</h2>
         <form method="POST" action='/upload' class="dropzone dz-clickable" id="dropper" enctype="multipart/form-data">
         </form>
 
+        <h2>
+            Uploaded
+            <input type="button" value="Clear" onclick="clearCookies()" />
+        </h2>
+        <div id="uploaded">
+
+        </div>
+
         <script type="application/javascript">
-            Dropzone.options.dropper = {{
-                paramName: 'file',
-                chunking: true,
-                forceChunking: {dropzone_force_chunking},
-                url: '/upload',
-                retryChunks: true,
-                parallelChunkUploads: {dropzone_parallel_chunks},
-                timeout: {dropzone_timeout}, // microseconds
-                maxFilesize: {dropzone_max_file_size}, // megabytes
-                chunkSize: {dropzone_chunk_size} // bytes
+            function clearCookies() {{
+                document.cookie = "files=; Max-Age=0";
+                document.getElementById("uploaded").innerHTML = "";
             }}
+
+            function getFilesFromCookie() {{
+                if ( document.cookie === 'undefined' ) {{ return [] }}
+                    console.log(document.cookie.split("=", 2));
+                    return document.cookie.split("=", 2)[1].split("||");
+            }}
+
+            function saveCookie(new_file) {{
+                    let all_files = getFilesFromCookie();
+                    all_files.push(new_file);
+                    document.cookie = `files=${{all_files.join("||")}}`;
+            }}
+
+            function generateLink(combo){{
+                const uuid = combo.split('|^^|')[0];
+                const name = combo.split('|^^|')[1];
+                if ({'true' if allow_downloads else 'false'}) {{
+                    return `<a href="/download/${{uuid}}" download="${{name}}">${{name}}</a>`;
+                }}
+                return name;
+            }}
+
+
+            function init() {{
+
+                Dropzone.options.dropper = {{
+                    paramName: 'file',
+                    chunking: true,
+                    forceChunking: {dropzone_force_chunking},
+                    url: '/upload',
+                    retryChunks: true,
+                    parallelChunkUploads: {dropzone_parallel_chunks},
+                    timeout: {dropzone_timeout}, // microseconds
+                    maxFilesize: {dropzone_max_file_size}, // megabytes
+                    chunkSize: {dropzone_chunk_size}, // bytes
+                    init: function () {{
+                        this.on("complete", function (file) {{
+                            let combo = `${{file.upload.uuid}}|^^|${{file.upload.filename}}`;
+                            saveCookie(combo);
+                            document.getElementById("uploaded").innerHTML += generateLink(combo)  + "<br />";
+                        }});
+                    }}
+                }}
+
+                if (typeof document.cookie !== 'undefined' ) {{
+                    let content = "";
+                     getFilesFromCookie().forEach(function (combo) {{
+                        content += generateLink(combo) + "<br />";
+                    }});
+
+                    document.getElementById("uploaded").innerHTML = content;
+                }}
+            }}
+
+            init();
+
         </script>
     </div>
 </body>
 </html>
     """
+
+
+@route("/favicon.ico")
+def favicon():
+    return zlib.decompress(
+        b"x\x9c\xedVYN\xc40\x0c5J%[\xe2\xa3|q\x06\x8e1G\xe1(=ZoV\xb2\xa7\x89\x97R\x8d\x84\x04\xe4\xa5\xcb(\xc9\xb3\x1do"
+        b"\x1d\x80\x17?\x1e\x0f\xf0O\x82\xcfw\x00\x7f\xc1\x87\xbf\xfd\x14l\x90\xe6#\xde@\xc1\x966n[z\x85\x11\xa6\xfcc"
+        b"\xdfw?s\xc4\x0b\x8e#\xbd\xc2\x08S\xe1111\xf1k\xb1NL\xfcU<\x99\xe4T\xf8\xf43|\xaa\x18\xf8\xc3\xbaHFw\xaaj\x94"
+        b"\xf4c[F\xc6\xee\xbb\xc2\xc0\x17\xf6\xf4\x12\x160\xf9\xa3\xfeQB5\xab@\xf4\x1f\xa55r\xf9\xa4KGG\xee\x16\xdd\xff"
+        b"\x8e\x9d\x8by\xc4\xe4\x17\tU\xbdDg\xf1\xeb\xf0Zh\x8e\xd3s\x9c\xab\xc3P\n<e\xcb$\x05 b\xd8\x84Q1\x8a\xd6Kt\xe6"
+        b"\x85(\x13\xe5\xf3]j\xcf\x06\x88\xe6K\x02\x84\x18\x90\xc5\xa7Kz\xd4\x11\xeeEZK\x012\xe9\xab\xa5\xbf\xb3@i\x00"
+        b"\xce\xe47\x0b\xb4\xfe\xb1d\xffk\xebh\xd3\xa3\xfd\xa4:`5J\xa3\xf1\xf5\xf4\xcf\x02tz\x8c_\xd2\xa1\xee\xe1\xad"
+        b"\xaa\xb7n-\xe5\xafoSQ\x14'\x01\xb7\x9b<\x15~\x0e\xf4b\x8a\x90k\x8c\xdaO\xfb\x18<H\x9d\xdfj\xab\xd0\xb43\xe1"
+        b'\xe3nt\x16\xdf\r\xe6\xa1d\xad\xd0\xc9z\x03"\xc7c\x94v\xb6I\xe1\x8f\xf5,\xaa2\x93}\x90\xe0\x94\x1d\xd2\xfcY~f'
+        b"\xab\r\xc1\xc8\xc4\xe4\x1f\xed\x03\x1e`\xd6\x02\xda\xc7k\x16\x1a\xf4\xcb2Q\x05\xa0\xe6\xb4\x1e\xa4\x84\xc6"
+        b"\xcc..`8'\x9a\xc9-\n\xa8\x05]?\xa3\xdfn\x11-\xcc\x0b\xb4\x7f67:\x0c\xcf\xd5\xbb\xfd\x89\x9ebG\xf8:\x8bG"
+        b"\xc0\xfb\x9dm\xe2\xdf\x80g\xea\xc4\xc45\xbe\x00\x03\xe9\xd6\xbb"
+    )
 
 
 @route("/upload", method="POST")
@@ -120,6 +199,16 @@ def upload():
     return "Chunk upload successful"
 
 
+@route("/download/<dz_uuid>")
+def download(dz_uuid):
+    if not allow_downloads:
+        raise HTTPError(status=403)
+    for file in storage_path.iterdir():
+        if file.is_file() and file.name.startswith(dz_uuid):
+            return static_file(file.name, root=file.parent.absolute(), download=True)
+    return HTTPError(status=404)
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", type=int, default=16273, required=False)
@@ -140,6 +229,7 @@ def parse_args():
     parser.add_argument("--chunk-size", type=str, default=dropzone_chunk_size, help="Chunk size (bytes)")
     parser.add_argument("--disable-parallel-chunks", required=False, default=False, action="store_true")
     parser.add_argument("--disable-force-chunking", required=False, default=False, action="store_true")
+    parser.add_argument("-a", "--allow-downloads", required=False, default=False, action="store_true")
     parser.add_argument("--dz-cdn", type=str, default=None, required=False)
     parser.add_argument("--dz-version", type=str, default=None, required=False)
     return parser.parse_args()
@@ -161,6 +251,8 @@ if __name__ == "__main__":
         dropzone_parallel_chunks = "false"
     if args.disable_force_chunking:
         dropzone_force_chunking = "false"
+    if args.allow_downloads:
+        allow_downloads = True
 
     if not storage_path.exists():
         storage_path.mkdir(exist_ok=True)

@@ -1,4 +1,4 @@
-name: Build executables for Linux Legacy
+name: Build executables for Linux
 on:
   push:
     branches: [ main, develop, build ]
