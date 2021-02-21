@@ -44,10 +44,10 @@ def index():
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/dropzone.css"/>
-    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/basic.css"/>
+    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/min/dropzone.min.css"/>
+    <link rel="stylesheet" href="{dropzone_cdn.rstrip('/')}/{dropzone_version}/min/basic.min.css"/>
     <script type="application/javascript"
-        src="{dropzone_cdn.rstrip('/')}/{dropzone_version}/dropzone.js">
+        src="{dropzone_cdn.rstrip('/')}/{dropzone_version}/min/dropzone.min.js">
     </script>
     <title>pyfiledrop</title>
 </head>
@@ -74,7 +74,6 @@ def index():
 
             function getFilesFromCookie() {{
                 if ( document.cookie === 'undefined' ) {{ return [] }}
-                    console.log(document.cookie.split("=", 2));
                     return document.cookie.split("=", 2)[1].split("||");
             }}
 
@@ -243,6 +242,12 @@ if __name__ == "__main__":
     dropzone_chunk_size = args.chunk_size
     dropzone_timeout = args.timeout
     dropzone_max_file_size = args.max_size
+    try:
+        if int(dropzone_timeout) < 1 or int(dropzone_chunk_size) < 1 or int(dropzone_max_file_size) < 1:
+            raise Exception("Invalid dropzone option, make sure max-size, timeout, and chunk-size are all positive")
+    except ValueError:
+        raise Exception("Invalid dropzone option, make sure max-size, timeout, and chunk-size are all integers")
+
     if args.dz_cdn:
         dropzone_cdn = args.dz_cdn
     if args.dz_version:
