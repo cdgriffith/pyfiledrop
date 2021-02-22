@@ -73,8 +73,7 @@ def index():
             }}
 
             function getFilesFromCookie() {{
-                if ( document.cookie === 'undefined' ) {{ return [] }}
-                    return document.cookie.split("=", 2)[1].split("||");
+                try {{ return document.cookie.split("=", 2)[1].split("||");}} catch (error) {{ return []; }}
             }}
 
             function saveCookie(new_file) {{
