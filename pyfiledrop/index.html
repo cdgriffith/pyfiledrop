@@ -12,10 +12,34 @@
     <link rel="stylesheet" href="{{dropzone_cdn}}/{{dropzone_version}}/min/dropzone.min.css"/>
     <link rel="stylesheet" href="{{dropzone_cdn}}/{{dropzone_version}}/min/basic.min.css"/>
     <style>
-        html body {
+        html, body {
             overflow-y: auto;
             height: 100%;
             margin: 0;
+            color: #9ba0a5;
+            background-color: #222;
+        }
+
+        input, select, textarea{
+            color: #9ba0a5;
+        }
+
+        .dz-message {
+            color: #fff;
+        }
+
+        .dropzone {
+            background: #999;
+        }
+
+        .dropzone {
+            background: #999 !important;
+            border-radius: 0 !important;
+        }
+
+        .dz-image{
+            background: #999 !important;
+            border-radius: 0 !important;
         }
 
         .navigation {
@@ -76,7 +100,7 @@
         </form>
 
         <p>
-            Upload size is restricted to {{dropzone_max_file_size}}MB.
+            Upload size is restricted to {{dropzone_max_file_size}}MB.<br>
             You must have the rights to post the file and make sure it follows all the requirements set out in the <a href="#" onclick="showId('terms')">Terms and Conditions</a>.
         </p>
 
@@ -110,6 +134,7 @@
                 <button onclick="sendReport()" id="reportButton">Report</button>
             </fieldset>
         </form>
+        <p>* Required Fields</p>
     </section>
 
     <section id="terms" class="container" style="display: none">
@@ -162,7 +187,6 @@
     }
 
     function sendReport() {
-        console.log('called send report');
         document.getElementById("reportButton").addEventListener("click", function (event) {
             event.preventDefault()
         });
@@ -207,7 +231,6 @@
 
     function read_cookie() {
         let result = document.cookie.match(new RegExp('files=([^;]+)'));
-        console.log(result);
         result && (result = JSON.parse(result[1]));
         if (!result || typeof result === 'undefined') {
             result = [];
@@ -239,6 +262,11 @@
             },
             2 * 24 * 60 * 60 * 1000);
 
+        let file_types = "{{dropzone_accepted_files}}";
+        if (file_types === "all") {
+            file_types = null;
+        }
+
         Dropzone.options.dropper = {
             paramName: 'file',
             chunking: true,
@@ -250,10 +278,9 @@
             timeout: parseInt("{{dropzone_timeout}}"), // microseconds
             maxFilesize: parseInt("{{dropzone_max_file_size}}"), // megabytes
             chunkSize: parseInt("{{dropzone_chunk_size}}"), // bytes
-            acceptedFiles: "{{dropzone_accepted_files}}" || null,
+            acceptedFiles: file_types,
             init: function () {
                 this.on("complete", function (file) {
-                    console.log(file);
                     let existing = read_cookie();
                     existing.unshift({
                         uuid: file.upload.uuid,

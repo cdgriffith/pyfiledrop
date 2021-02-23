@@ -236,8 +236,8 @@ def generate_thumbnail(file, dz_uuid):
     save_file = thumbnail_path / f"{dz_uuid}.avif"
     try:
         image = Image.open(file)
-        image.thumbnail((64, 64))
-        image.save(save_file)
+        image.thumbnail((256, 256))
+        image.save(save_file, qmax=20)
     except Exception:
         traceback.print_exc()
         print(f"Could not generate thumbnail for {file}")
@@ -272,7 +272,7 @@ def parse_args():
         "--file-types",
         type=str,
         default=dropzone_accepted_files,
-        help="Allows images by default, set to '' to allow anything. "
+        help="Allows images by default, set to 'all' to allow anything. "
         "Use mime types or extensions, i.e. 'image/*,application/pdf,.psd'",
     )
     parser.add_argument("--disable-parallel-chunks", required=False, default=False, action="store_true")
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     dropzone_chunk_size = args.chunk_size
     dropzone_timeout = args.timeout
     dropzone_max_file_size = args.max_size
-    dropzone_accepted_files = args.file_types
+    dropzone_accepted_files = args.file_types.strip("'\"") or "all"
     site_name = args.site_name
     try:
         if int(dropzone_timeout) < 1 or int(dropzone_chunk_size) < 1 or int(dropzone_max_file_size) < 1:
