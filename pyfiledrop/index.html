@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <!-- CSS Reset -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.css">
+    <!-- Milligram CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.css">
+    <!-- Dropzone CSS -->
+    <link rel="stylesheet" href="{{dropzone_cdn}}/{{dropzone_version}}/min/dropzone.min.css"/>
+    <link rel="stylesheet" href="{{dropzone_cdn}}/{{dropzone_version}}/min/basic.min.css"/>
+    <style>
+        html body {
+            overflow-y: auto;
+            height: 100%;
+            margin: 0;
+        }
+
+        .navigation {
+            margin-top: 10px;
+            height: 100px;
+        }
+
+        .navigation_list {
+            /*border-bottom: solid 1px #ccc;*/
+            padding: 20px 10px;
+            text-align: center;
+        }
+
+        .navigation_item {
+            display: inline;
+            list-style: none;
+            margin: 0 20px;
+        }
+
+        .title {
+            display: inline;
+        }
+
+        #drop_container {
+            height: 100%;
+        }
+
+        footer {
+            /*position: fixed;*/
+            /*bottom: 0;*/
+            width: 100%;
+        }
+
+        #uploaded {
+            min-height: 200px;
+        }
+
+    </style>
+    <!-- Dropzone Javascript -->
+    <script type="application/javascript" src="{{dropzone_cdn}}/{{dropzone_version}}/min/dropzone.min.js"> </script>
+    <title>{{site_name}}</title>
+</head>
+<body>
+<main class="wrapper">
+    <nav class="navigation">
+        <section class="container">
+            <a href="#" onclick="showId('drop_container')" ><h1 class="title">{{site_name}}</h1></a>
+            <ul class="navigation_list float-right">
+                <li class="navigation_item"><a href="#" onclick="showId('report')">Report Abuse</a></li>
+                <li class="navigation_item"><a href="#" onclick="showId('about')">About</a></li>
+            </ul>
+        </section>
+    </nav>
+
+    <section id="drop_container" class="container">
+        <h3 id="alert" style="color:red"></h3>
+        <form method="POST" action='/upload' class="dropzone dz-clickable" id="dropper" enctype="multipart/form-data">
+        </form>
+
+        <p>
+            Upload size is restricted to {{dropzone_max_file_size}}MB.
+            You must have the rights to post the file and make sure it follows all the requirements set out in the <a href="#" onclick="showId('terms')">Terms and Conditions</a>.
+        </p>
+
+        <h2>
+            Uploaded
+            <button class="button button-outline float-right" onclick="clearCookies()">Clear</button>
+        </h2>
+
+        <div id="uploaded">
+
+        </div>
+    </section>
+
+    <section id="report" class="container" style="display: none">
+        <h2>Report Content
+            <button class="button button-outline float-right" onclick="showId('drop_container')">Close</button>
+        </h2>
+        <form id="reportForm">
+            <fieldset>
+                <label for="uuidField">UUID*</label>
+                <input type="text" placeholder="333-33333-3333" id="uuidField">
+                <label for="emailField">Your Email*</label>
+                <input type="text" placeholder="test@example.com" id="emailField">
+                <label for="reasonField">Reason*</label>
+                <select id="reasonField">
+                    <option value="DMCA">DMCA Copyright Claim</option>
+                    <option value="illegal">Illegal Content</option>
+                </select>
+                <label for="supportField">Supporting Text*</label>
+                <textarea id="supportField" placeholder="Explanation of report"></textarea>
+                <button onclick="sendReport()" id="reportButton">Report</button>
+            </fieldset>
+        </form>
+    </section>
+
+    <section id="terms" class="container" style="display: none">
+        <h2>Terms and Conditions
+            <button class="button button-outline float-right" onclick="showId('drop_container')">Close</button>
+        </h2>
+        <div id="terms_content">
+
+        </div>
+    </section>
+
+    <section id="about" class="container" style="display: none">
+        <h2>About
+            <button class="button button-outline float-right" onclick="showId('drop_container')">Close</button>
+        </h2>
+
+        <p>
+            This is a file dropping website, meant to be fast and simple.
+        </p>
+
+    </section>
+
+
+    <footer style="text-align: center">
+        <a href="#" onclick="showId('terms')">Terms and Conditions</a> | <a href="#" onclick="showId('report')">DMCA</a> <br>
+        This site does not use any external tracking cookies.
+    </footer>
+
+</main>
+<script type="application/javascript">
+
+    function showId(idName) {
+        document.getElementById('report').style.display = 'none';
+        document.getElementById('terms').style.display = 'none';
+        document.getElementById('about').style.display = 'none';
+        document.getElementById('drop_container').style.display = 'none';
+        document.getElementById(idName).style.display = 'block';
+    }
+
+    function clearCookies() {
+        document.cookie = "files=; Max-Age=0";
+        document.getElementById("uploaded").innerHTML = "";
+    }
+
+    function generateLink(data) {
+        if ("{{allow_downloads}}".toLocaleLowerCase() === 'true') {
+            return `<a href="/download/${data.uuid}" download="${data.filename}">${data.filename}</a>`;
+        }
+        return data.filename;
+    }
+
+    function sendReport() {
+        console.log('called send report');
+        document.getElementById("reportButton").addEventListener("click", function (event) {
+            event.preventDefault()
+        });
+
+        fetch('/report', {
+            method: 'post',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                email: document.getElementById("emailField").value,
+                reason: document.getElementById("reasonField").value,
+                uuid: document.getElementById("uuidField").value,
+                supporting_text: document.getElementById("supportField").value
+            })
+        }).then(function (response) {
+            if (!response.ok) {
+                response.text().then(function (text) {
+                    alert(text);
+                });
+            } else {
+                alert("Thank you for the report\nIf further action is necessary we will reach out to your email");
+                showId('drop_container');
+                document.getElementById("reportForm").reset();
+            }
+        });
+    }
+
+    function formatBytes(bytes, decimals) {
+        if (bytes === 0) return '0 Bytes';
+        let k = 1024,
+            dm = decimals || 2,
+            sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
+            i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function bake_cookie(value) {
+        document.cookie = ['files=', JSON.stringify(value), '; path=/;'].join('');
+    }
+
+    function read_cookie() {
+        let result = document.cookie.match(new RegExp('files=([^;]+)'));
+        console.log(result);
+        result && (result = JSON.parse(result[1]));
+        if (!result || typeof result === 'undefined') {
+            result = [];
+        }
+        return result;
+    }
+
+    function createTable() {
+        const results = read_cookie();
+        if (results.length === 0) {
+            return;
+        }
+
+        let content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td></thead>";
+        for (let i = 0; i < results.length; i++) {
+            content += `<tr><td><img alt="" src="/thumbnail/${results[i].uuid}.avif" style="max-width: 64px; max-height: 64px"/></td>`
+            content += `<td style="word-break: break-all; max-width: 220px">${generateLink(results[i])}</td>`;
+            content += `<td style="word-break: break-all; max-width: 220px">${results[i].uuid}</td>`;
+            // content += `<td style="word-break: break-all; max-width: 180px">${results[i].sha3_256}</td>`;
+            content += `<td>${results[i].size}</td></tr>`;
+        }
+        content += "</table>";
+        document.getElementById("uploaded").innerHTML = content;
+    }
+
+    function init() {
+        setTimeout(function () {
+                document.getElementById("alert").innerHTML = "Please refresh page before uploading";
+            },
+            2 * 24 * 60 * 60 * 1000);
+
+        Dropzone.options.dropper = {
+            paramName: 'file',
+            chunking: true,
+            forceChunking: "{{dropzone_force_chunking}}",
+            url: '/upload',
+            retryChunks: true,
+            headers: {token: "{{jwt_token}}"},
+            parallelChunkUploads: parseInt("{{dropzone_parallel_chunks}}"),
+            timeout: parseInt("{{dropzone_timeout}}"), // microseconds
+            maxFilesize: parseInt("{{dropzone_max_file_size}}"), // megabytes
+            chunkSize: parseInt("{{dropzone_chunk_size}}"), // bytes
+            acceptedFiles: "{{dropzone_accepted_files}}" || null,
+            init: function () {
+                this.on("complete", function (file) {
+                    console.log(file);
+                    let existing = read_cookie();
+                    existing.unshift({
+                        uuid: file.upload.uuid,
+                        size: formatBytes(file.upload.bytesSent),
+                        filename: file.upload.filename,
+                        sha3_256: JSON.parse(file.xhr.responseText).sha3_256,
+                    });
+                    bake_cookie(existing);
+                    createTable();
+                });
+            }
+        }
+
+        createTable();
+
+        document.getElementById("terms_content").innerHTML = "{{ terms_and_conditions }}".replaceAll("--linebreak--", "<br>")
+    }
+
+    init();
+
+</script>
+</body>
+</html>
