@@ -1,7 +1,6 @@
-bottle>=0.12.19
-imagehash==4.2.0
+bottle>=0.13
 paste
-pillow==8.1.0
+pillow
 pillow-avif-plugin
 pyjwt
 werkzeug

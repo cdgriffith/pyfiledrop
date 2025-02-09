@@ -20,21 +20,24 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import pillow_avif  # Required for thumbnails, do not delete
 
-storage_path: Path = Path(__file__).parent / "storage"
-chunk_path: Path = Path(__file__).parent / "chunk"
-thumbnail_path: Path = Path(__file__).parent / "thumbnail"
-reported_path: Path = Path(__file__).parent / "reported"
+storage_path: Path = Path(__file__).parent.parent / "storage"
+chunk_path: Path = Path(__file__).parent.parent / "chunk"
+thumbnail_path: Path = Path(__file__).parent.parent / "thumbnail"
+reported_path: Path = Path(__file__).parent.parent / "reported"
+deleted_path: Path = Path(__file__).parent.parent / "deleted"
+deleted_path.mkdir(exist_ok=True, parents=True)
 
-site_name = "pyfiledrop"
+site_name = "CDGriffith Photography File Drop"
 allow_downloads = True
+allow_deletes = False
 dropzone_cdn = "https://cdnjs.cloudflare.com/ajax/libs/dropzone"
-dropzone_version = "5.7.6"
+dropzone_version = "5.9.3"
 dropzone_timeout = "120000"
 dropzone_max_file_size = "100000"
 dropzone_chunk_size = "1000000"
 dropzone_parallel_chunks = "true"
 dropzone_force_chunking = "true"
-dropzone_accepted_files = "image/*,.psd"
+dropzone_accepted_files = "image/*,.psd,video/*,.mp4,.mkv"
 
 lock = Lock()
 chucks = defaultdict(list)
@@ -96,7 +99,8 @@ def index():
         dropzone_max_file_size=dropzone_max_file_size,
         dropzone_chunk_size=dropzone_chunk_size,
         dropzone_accepted_files=dropzone_accepted_files,
-        terms_and_conditions=escape(terms).replace("\n", "--linebreak--"),
+        terms_and_conditions=escape(terms, quote=False).replace("\n", "--linebreak--"),
+        allow_deletes=allow_deletes
     )
 
 
@@ -194,6 +198,21 @@ def download(dz_uuid):
     return HTTPError(status=404)
 
 
+@route("/delete/<dz_uuid>", method="POST")
+def delete(dz_uuid):
+    if not allow_deletes:
+        return HTTPError(status=403)
+    to_move = []
+    for file in storage_path.iterdir():
+        if file.is_file() and file.name.startswith(dz_uuid):
+            to_move.append(file)
+    if not to_move:
+        return HTTPError(status=404)
+    for file in to_move:
+        shutil.move(file, deleted_path / file.name)
+    return HTTPError(status=200)
+
+
 @route("/thumbnail/<dz_uuid>.avif")
 def thumbnail(dz_uuid):
     file = thumbnail_path / f"{dz_uuid}.avif"
@@ -275,13 +294,23 @@ def parse_args():
         help="Allows images by default, set to 'all' to allow anything. "
         "Use mime types or extensions, i.e. 'image/*,application/pdf,.psd'",
     )
-    parser.add_argument("--disable-parallel-chunks", required=False, default=False, action="store_true")
-    parser.add_argument("--disable-force-chunking", required=False, default=False, action="store_true")
-    parser.add_argument("-d", "--disable-downloads", required=False, default=False, action="store_true")
+    parser.add_argument("--disable-parallel-chunks", required=False, default="false")
+    parser.add_argument("--disable-force-chunking", required=False, default="false")
+    parser.add_argument("-d", "--disable-downloads", required=False, default="false")
     parser.add_argument("--site-name", type=str, required=False, default=site_name)
     parser.add_argument("--dz-cdn", type=str, default=None, required=False)
     parser.add_argument("--dz-version", type=str, default=None, required=False)
+    parser.add_argument("--allow-delete", required=False, default="false")
     return parser.parse_args()
+
+
+def yes_or_no(arg):
+    arg = arg.strip().lower()
+    if arg in ("f", "false", "0", "n", "no"):
+        return False
+    if arg in ("t", "true", "1", "y", "yes"):
+        return True
+    raise Exception("Invalid argument, must be one of 'true', 'false', '1', '0'")
 
 
 if __name__ == "__main__":
@@ -306,12 +335,14 @@ if __name__ == "__main__":
         dropzone_cdn = args.dz_cdn
     if args.dz_version:
         dropzone_version = args.dz_version
-    if args.disable_parallel_chunks:
+    if yes_or_no(args.disable_parallel_chunks):
         dropzone_parallel_chunks = "false"
-    if args.disable_force_chunking:
+    if yes_or_no(args.disable_force_chunking):
         dropzone_force_chunking = "false"
-    if args.disable_downloads:
+    if yes_or_no(args.disable_downloads):
         allow_downloads = False
+    if yes_or_no(args.allow_delete):
+        allow_deletes = True
 
     storage_path.mkdir(exist_ok=True, parents=True)
     chunk_path.mkdir(exist_ok=True, parents=True)
@@ -319,7 +350,7 @@ if __name__ == "__main__":
     reported_path.mkdir(exist_ok=True, parents=True)
 
     print(
-        f"""Timeout: {int(dropzone_timeout) // 1000} seconds per chunk
+f"""Timeout: {int(dropzone_timeout) // 1000} seconds per chunk
 Chunk Size: {int(dropzone_chunk_size) // 1024} Kb
 Max File Size: {int(dropzone_max_file_size)} Mb
 Force Chunking: {dropzone_force_chunking}
@@ -328,6 +359,8 @@ Storage Path: {storage_path.absolute()}
 Chunk Path: {chunk_path.absolute()}
 Thumbnail Path: {thumbnail_path.absolute()}
 Reported Path: {reported_path.absolute()}
+Allow Downloads: {allow_downloads}
+Allow Deletes: {allow_deletes}
 """
     )
     run(server="paste", port=args.port, host=args.host)

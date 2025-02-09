@@ -25,15 +25,15 @@
         }
 
         .dz-message {
-            color: #fff;
+            color: #000;
         }
 
         .dropzone {
-            background: #999;
+            background: #555;
         }
 
         .dropzone {
-            background: #999 !important;
+            background: #555 !important;
             border-radius: 0 !important;
         }
 
@@ -209,9 +209,32 @@
                     alert(text);
                 });
             } else {
-                alert("Thank you for the report\nIf further action is necessary we will reach out to your email");
+                alert("Thank you for the report, the item is now pending review\nIf further action is necessary we will reach out to your email");
                 showId('drop_container');
                 document.getElementById("reportForm").reset();
+            }
+        });
+    }
+
+     function deleteItemFromServer(uuid) {
+        let existing = read_cookie();
+        let index = existing.findIndex(x => x.uuid === uuid);
+        if (index > -1) {
+            existing.splice(index, 1);
+        }
+        bake_cookie(existing);
+        createTable();
+        fetch(`/delete/${uuid}`, {
+            method: 'post',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        }).then(function (response) {
+            if (!response.ok) {
+                response.text().then(function (text) {
+                    console.log(text);
+                });
             }
         });
     }
@@ -238,19 +261,32 @@
         return result;
     }
 
+    function deleteItem(uuid) {
+        deleteItemFromServer(uuid);
+
+    }
+
     function createTable() {
         const results = read_cookie();
         if (results.length === 0) {
             return;
         }
-
-        let content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td></thead>";
+        let content = "";
+        if ("{{allow_deletes}}".toLocaleLowerCase() === 'true') {
+            content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td><td>Delete</td></thead>";
+        } else {
+            content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td></thead>";
+        }
         for (let i = 0; i < results.length; i++) {
             content += `<tr><td><img alt="" src="/thumbnail/${results[i].uuid}.avif" style="max-width: 64px; max-height: 64px"/></td>`
             content += `<td style="word-break: break-all; max-width: 220px">${generateLink(results[i])}</td>`;
             content += `<td style="word-break: break-all; max-width: 220px">${results[i].uuid}</td>`;
             // content += `<td style="word-break: break-all; max-width: 180px">${results[i].sha3_256}</td>`;
-            content += `<td>${results[i].size}</td></tr>`;
+            content += `<td>${results[i].size}</td>`;
+            if ("{{allow_deletes}}".toLocaleLowerCase() === 'true') {
+                content += `<td><button onclick="deleteItem('${results[i].uuid}')">X</button></td>`;
+            }
+            content += `</tr>`;
         }
         content += "</table>";
         document.getElementById("uploaded").innerHTML = content;
