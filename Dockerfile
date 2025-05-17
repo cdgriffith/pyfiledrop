@@ -18,7 +18,7 @@ ENV HOST=0.0.0.0
 ENV MAX_SIZE=100000
 ENV TIMEOUT=120000
 ENV CHUNK_SIZE=1000000
-ENV FILE_TYPES=image/*,.psd,video/*,.mp4,.mkv
+ENV FILE_TYPES=image/*,.psd,.arw,video/*,.mp4,.mkv,.zip,.7z,.gzip,.tar,.gz,.rar,.raw,.pdf
 ENV DISABLE_PARALLEL_CHUNKS=false
 ENV DISABLE_FORCE_CHUNKING=false
 ENV DISABLE_DOWNLOADS=false
@@ -26,6 +26,7 @@ ENV SITE_NAME="pyfiledrop"
 ENV DZ_CDN=https://cdnjs.cloudflare.com/ajax/libs/dropzone
 ENV DZ_VERSION=5.9.3
 ENV ALLOW_DELETE=false
+ENV ADMIN_PASS=pyfileadmin
 
 VOLUME /storage /chunk /thumbnails /reported
 
@@ -51,4 +52,5 @@ CMD ["sh", "-c", "python pyfiledrop.py \
 --allow-delete ${ALLOW_DELETE} \
 --site-name ${SITE_NAME} \
 --dz-cdn ${DZ_CDN} \
---dz-version ${DZ_VERSION}"]
+--dz-version ${DZ_VERSION} \
+--admin-password ${ADMIN_PASS}"]

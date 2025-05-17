@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <!-- CSS Reset -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.css">
+    <!-- Milligram CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.css">
+    <!-- Dropzone CSS -->
+    <link rel="stylesheet" href="{{dropzone_cdn}}/{{dropzone_version}}/min/dropzone.min.css"/>
+    <link rel="stylesheet" href="{{dropzone_cdn}}/{{dropzone_version}}/min/basic.min.css"/>
+    <style>
+        html, body {
+            overflow-y: auto;
+            height: 100%;
+            margin: 0;
+            color: #9ba0a5;
+            background-color: #222;
+        }
+
+        input, select, textarea{
+            color: #9ba0a5;
+        }
+
+        .navigation {
+            margin-top: 10px;
+            height: 100px;
+        }
+
+        .navigation_list {
+            padding: 20px 10px;
+            text-align: center;
+        }
+
+        .navigation_item {
+            display: inline;
+            list-style: none;
+            margin: 0 20px;
+        }
+
+        .title {
+            display: inline;
+        }
+
+        #admin_container {
+            height: 100%;
+        }
+
+        footer {
+            width: 100%;
+        }
+
+        .file-section {
+            min-height: 200px;
+            margin-bottom: 40px;
+        }
+
+        .tab-button {
+            margin-right: 10px;
+        }
+
+        .active-tab {
+            background-color: #9b4dca;
+            color: white;
+        }
+    </style>
+    <title>{{site_name}} - Admin</title>
+</head>
+<body>
+<main class="wrapper">
+    <nav class="navigation">
+        <section class="container">
+            <a href="/"><h1 class="title">{{site_name}} - Admin</h1></a>
+            <ul class="navigation_list float-right">
+                <li class="navigation_item"><a href="/">Back to Upload</a></li>
+            </ul>
+        </section>
+    </nav>
+
+    <section id="admin_container" class="container">
+        <h3 id="alert" style="color:red"></h3>
+
+        <div class="tab-buttons">
+            <button id="uploaded-tab" class="button tab-button active-tab" onclick="showTab('uploaded-files')">Uploaded Files</button>
+            <button id="deleted-tab" class="button tab-button" onclick="showTab('deleted-files')">Deleted Files</button>
+        </div>
+
+        <div id="uploaded-files" class="file-section">
+            <h2>Uploaded Files</h2>
+            <div id="uploaded-list"></div>
+        </div>
+
+        <div id="deleted-files" class="file-section" style="display: none;">
+            <h2>Deleted Files</h2>
+            <div id="deleted-list"></div>
+        </div>
+    </section>
+
+    <footer style="text-align: center">
+        Admin Panel | <a href="/">Return to Main Site</a>
+    </footer>
+
+</main>
+<script type="application/javascript">
+    function showTab(tabId) {
+        // Hide all file sections
+        document.getElementById('uploaded-files').style.display = 'none';
+        document.getElementById('deleted-files').style.display = 'none';
+
+        // Show the selected tab
+        document.getElementById(tabId).style.display = 'block';
+
+        // Update tab button styles
+        document.getElementById('uploaded-tab').classList.remove('active-tab');
+        document.getElementById('deleted-tab').classList.remove('active-tab');
+
+        if (tabId === 'uploaded-files') {
+            document.getElementById('uploaded-tab').classList.add('active-tab');
+        } else if (tabId === 'deleted-files') {
+            document.getElementById('deleted-tab').classList.add('active-tab');
+        }
+    }
+
+    function generateLink(data, isDeleted = false) {
+        let downloadPath = isDeleted ? "/admin/download-deleted/" : "/download/";
+        return `<a href="${downloadPath}${data.uuid}" download="${data.filename}">${data.filename}</a>`;
+    }
+
+    function formatBytes(bytes, decimals) {
+        if (bytes === 0) return '0 Bytes';
+        let k = 1024,
+            dm = decimals || 2,
+            sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
+            i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function createUploadedTable(files) {
+        if (files.length === 0) {
+            document.getElementById("uploaded-list").innerHTML = "<p>No uploaded files found.</p>";
+            return;
+        }
+
+        let content = "<table><thead><tr><td></td><td>Filename</td><td>UUID</td><td>Size</td></tr></thead><tbody>";
+
+        for (let i = 0; i < files.length; i++) {
+            content += `<tr>
+                <td><img alt="" src="/thumbnail/${files[i].uuid}.avif" style="max-width: 64px; max-height: 64px"/></td>
+                <td style="word-break: break-all; max-width: 220px">${generateLink(files[i])}</td>
+                <td style="word-break: break-all; max-width: 220px">${files[i].uuid}</td>
+                <td>${formatBytes(files[i].size)}</td>
+            </tr>`;
+        }
+
+        content += "</tbody></table>";
+        document.getElementById("uploaded-list").innerHTML = content;
+    }
+
+    function createDeletedTable(files) {
+        if (files.length === 0) {
+            document.getElementById("deleted-list").innerHTML = "<p>No deleted files found.</p>";
+            return;
+        }
+
+        let content = "<table><thead><tr><td></td><td>Filename</td><td>UUID</td><td>Size</td><td>Actions</td></tr></thead><tbody>";
+
+        for (let i = 0; i < files.length; i++) {
+            content += `<tr>
+                <td><img alt="" src="/admin/thumbnail-deleted/${files[i].uuid}.avif" style="max-width: 64px; max-height: 64px"/></td>
+                <td style="word-break: break-all; max-width: 220px">${generateLink(files[i], true)}</td>
+                <td style="word-break: break-all; max-width: 220px">${files[i].uuid}</td>
+                <td>${formatBytes(files[i].size)}</td>
+                <td><button class="button button-outline" onclick="permanentlyDeleteFile('${files[i].uuid}')">Permanently Delete</button></td>
+            </tr>`;
+        }
+
+        content += "</tbody></table>";
+
+        // Add a button to permanently delete all files
+        if (files.length > 0) {
+            content += `<div style="margin-top: 20px">
+                <button class="button button-outline" onclick="permanentlyDeleteAllFiles()">Permanently Delete All Files</button>
+            </div>`;
+        }
+        document.getElementById("deleted-list").innerHTML = content;
+    }
+
+    function loadUploadedFiles() {
+        fetch('/admin/list-uploaded')
+            .then(response => response.json())
+            .then(data => {
+                createUploadedTable(data);
+            })
+            .catch(error => {
+                console.error('Error loading uploaded files:', error);
+                document.getElementById("uploaded-list").innerHTML = "<p>Error loading uploaded files.</p>";
+            });
+    }
+
+    function loadDeletedFiles() {
+        fetch('/admin/list-deleted')
+            .then(response => response.json())
+            .then(data => {
+                createDeletedTable(data);
+            })
+            .catch(error => {
+                console.error('Error loading deleted files:', error);
+                document.getElementById("deleted-list").innerHTML = "<p>Error loading deleted files.</p>";
+            });
+    }
+
+    function permanentlyDeleteFile(uuid) {
+        if (!confirm(`Are you sure you want to permanently delete this file? This action cannot be undone.`)) {
+            return;
+        }
+
+        fetch(`/admin/permanently-delete/${uuid}`, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            document.getElementById("alert").textContent = "File permanently deleted successfully.";
+            // Reload the deleted files list to reflect the changes
+            loadDeletedFiles();
+            // Clear the alert message after 3 seconds
+            setTimeout(() => {
+                document.getElementById("alert").textContent = "";
+            }, 3000);
+        })
+        .catch(error => {
+            console.error('Error permanently deleting file:', error);
+            document.getElementById("alert").textContent = `Error permanently deleting file: ${error.message}`;
+        });
+    }
+
+    function permanentlyDeleteAllFiles() {
+        if (!confirm(`Are you sure you want to permanently delete ALL deleted files? This action cannot be undone.`)) {
+            return;
+        }
+
+        fetch('/admin/permanently-delete-all', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            let message = `${data.deleted_count} files permanently deleted successfully.`;
+            if (data.status === "partial" && data.errors) {
+                message += ` However, some files could not be deleted: ${data.errors.join(", ")}`;
+            }
+            document.getElementById("alert").textContent = message;
+            // Reload the deleted files list to reflect the changes
+            loadDeletedFiles();
+            // Clear the alert message after 5 seconds
+            setTimeout(() => {
+                document.getElementById("alert").textContent = "";
+            }, 5000);
+        })
+        .catch(error => {
+            console.error('Error permanently deleting all files:', error);
+            document.getElementById("alert").textContent = `Error permanently deleting all files: ${error.message}`;
+        });
+    }
+
+    function init() {
+        loadUploadedFiles();
+        loadDeletedFiles();
+    }
+
+    init();
+</script>
+</body>
+</html>

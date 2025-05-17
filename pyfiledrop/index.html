@@ -101,7 +101,6 @@
 
         <p>
             Upload size is restricted to {{dropzone_max_file_size}}MB.<br>
-            You must have the rights to post the file and make sure it follows all the requirements set out in the <a href="#" onclick="showId('terms')">Terms and Conditions</a>.
         </p>
 
         <h2>
@@ -217,13 +216,6 @@
     }
 
      function deleteItemFromServer(uuid) {
-        let existing = read_cookie();
-        let index = existing.findIndex(x => x.uuid === uuid);
-        if (index > -1) {
-            existing.splice(index, 1);
-        }
-        bake_cookie(existing);
-        createTable();
         fetch(`/delete/${uuid}`, {
             method: 'post',
             headers: {
@@ -261,16 +253,36 @@
         return result;
     }
 
-    function deleteItem(uuid) {
+    function deleteItem(uuid, event) {
+        // Prevent default behavior if event is provided
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        // Remove item from cookie
+        let existing = read_cookie();
+        let index = existing.findIndex(x => x.uuid === uuid);
+        if (index > -1) {
+            existing.splice(index, 1);
+        }
+        // Update cookie
+        bake_cookie(existing);
+        createTable(existing);
+        // Notify server
         deleteItemFromServer(uuid);
 
+        // Force DOM update
+        document.getElementById("uploaded").style.display = 'none';
+        setTimeout(function() {
+            document.getElementById("uploaded").style.display = 'block';
+        }, 10);
+
+        return false;
     }
 
     function createTable() {
         const results = read_cookie();
-        if (results.length === 0) {
-            return;
-        }
         let content = "";
         if ("{{allow_deletes}}".toLocaleLowerCase() === 'true') {
             content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td><td>Delete</td></thead>";
@@ -284,7 +296,7 @@
             // content += `<td style="word-break: break-all; max-width: 180px">${results[i].sha3_256}</td>`;
             content += `<td>${results[i].size}</td>`;
             if ("{{allow_deletes}}".toLocaleLowerCase() === 'true') {
-                content += `<td><button onclick="deleteItem('${results[i].uuid}')">X</button></td>`;
+                content += `<td><button onclick="return deleteItem('${results[i].uuid}', event)">X</button></td>`;
             }
             content += `</tr>`;
         }

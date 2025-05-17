@@ -13,6 +13,8 @@ import traceback
 from email.utils import parseaddr
 import uuid
 import string
+import base64
+import json
 
 from bottle import route, run, request, error, HTTPError, static_file, HTTPResponse, template
 import jwt
@@ -30,6 +32,7 @@ deleted_path.mkdir(exist_ok=True, parents=True)
 site_name = "CDGriffith Photography File Drop"
 allow_downloads = True
 allow_deletes = False
+admin_password = ""  # Will be set via command line argument
 dropzone_cdn = "https://cdnjs.cloudflare.com/ajax/libs/dropzone"
 dropzone_version = "5.9.3"
 dropzone_timeout = "120000"
@@ -100,8 +103,142 @@ def index():
         dropzone_chunk_size=dropzone_chunk_size,
         dropzone_accepted_files=dropzone_accepted_files,
         terms_and_conditions=escape(terms, quote=False).replace("\n", "--linebreak--"),
-        allow_deletes=allow_deletes
+        allow_deletes=allow_deletes,
     )
+
+
+@route("/admin")
+def admin():
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    admin_file = Path(__file__).parent / "admin.html"
+    return template(
+        admin_file.read_text(),
+        site_name=site_name,
+        dropzone_cdn=dropzone_cdn.rstrip("/"),
+        dropzone_version=dropzone_version,
+    )
+
+
+@route("/admin/list-uploaded")
+def list_uploaded():
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    files = []
+    for file in storage_path.iterdir():
+        if file.is_file():
+            # Extract UUID from filename (format: uuid_filename)
+            uuid_part = file.name.split("_", 1)[0]
+            filename = file.name[len(uuid_part) + 1 :]  # +1 for the underscore
+            files.append({"uuid": uuid_part, "filename": filename, "size": file.stat().st_size})
+
+    return HTTPResponse(status=200, body=json.dumps(files), content_type="application/json")
+
+
+@route("/admin/list-deleted")
+def list_deleted():
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    files = []
+    for file in deleted_path.iterdir():
+        if file.is_file():
+            # Extract UUID from filename (format: uuid_filename)
+            uuid_part = file.name.split("_", 1)[0]
+            filename = file.name[len(uuid_part) + 1 :]  # +1 for the underscore
+            files.append({"uuid": uuid_part, "filename": filename, "size": file.stat().st_size})
+
+    return HTTPResponse(status=200, body=json.dumps(files), content_type="application/json")
+
+
+@route("/admin/download-deleted/<dz_uuid>")
+def download_deleted(dz_uuid):
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    for file in deleted_path.iterdir():
+        if file.is_file() and file.name.startswith(dz_uuid):
+            return static_file(file.name, root=file.parent.absolute(), download=True)
+    return HTTPError(status=404)
+
+
+@route("/admin/thumbnail-deleted/<dz_uuid>.avif")
+def thumbnail_deleted(dz_uuid):
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    # First check if there's a thumbnail in the thumbnail directory
+    file = thumbnail_path / f"{dz_uuid}.avif"
+    if file.exists():
+        return static_file(file.name, root=file.parent, mimetype="image/avif")
+
+    # If not found, return the default thumbnail
+    default_thumb = Path(__file__).parent / "default.avif"
+    if not default_thumb.exists():
+        return HTTPError(status=404)
+    return static_file(default_thumb.name, root=default_thumb.parent, mimetype="image/avif")
+
+
+@route("/admin/permanently-delete/<dz_uuid>", method="POST")
+def permanently_delete(dz_uuid):
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    to_delete = []
+    for file in deleted_path.iterdir():
+        if file.is_file() and file.name.startswith(dz_uuid):
+            to_delete.append(file)
+
+    if not to_delete:
+        return HTTPError(status=404)
+
+    for file in to_delete:
+        try:
+            os.unlink(file)
+        except Exception as e:
+            return HTTPError(status=500, body=f"Error deleting file: {str(e)}")
+
+    return HTTPResponse(status=200, body=json.dumps({"status": "success"}), content_type="application/json")
+
+
+@route("/admin/permanently-delete-all", method="POST")
+def permanently_delete_all():
+    if not check_admin_password():
+        response = HTTPResponse(status=401, body="Unauthorized")
+        response.set_header("WWW-Authenticate", 'Basic realm="Admin Access"')
+        return response
+
+    deleted_count = 0
+    errors = []
+
+    for file in deleted_path.iterdir():
+        if file.is_file():
+            try:
+                os.unlink(file)
+                deleted_count += 1
+            except Exception as e:
+                errors.append(f"Error deleting {file.name}: {str(e)}")
+
+    result = {"status": "success" if not errors else "partial", "deleted_count": deleted_count}
+
+    if errors:
+        result["errors"] = errors
+
+    return HTTPResponse(status=200, body=json.dumps(result), content_type="application/json")
 
 
 @route("/favicon.ico")
@@ -114,6 +251,25 @@ def save_ip(ip_address, dz_uuid):
     # with lock:
     #     with open(Path(__file__).parent / "owners", "a") as f:
     #         f.write(f"{dz_uuid}\t{ip_address}")
+
+
+def check_admin_password():
+    """Check if admin password is set and correct in the request."""
+    if not admin_password:
+        return True  # No password set, allow access
+
+    auth_header = request.get_header("Authorization")
+    if not auth_header or not auth_header.startswith("Basic "):
+        return False
+
+    try:
+        # Basic auth format: "Basic base64(username:password)"
+        # We only care about the password part
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+        username, password = decoded.split(":", 1)
+        return password == admin_password
+    except Exception:
+        return False
 
 
 @route("/upload", method="POST")
@@ -301,6 +457,7 @@ def parse_args():
     parser.add_argument("--dz-cdn", type=str, default=None, required=False)
     parser.add_argument("--dz-version", type=str, default=None, required=False)
     parser.add_argument("--allow-delete", required=False, default="false")
+    parser.add_argument("--admin-password", type=str, required=False, help="Password for admin access")
     return parser.parse_args()
 
 
@@ -344,13 +501,16 @@ if __name__ == "__main__":
     if yes_or_no(args.allow_delete):
         allow_deletes = True
 
+    if args.admin_password:
+        admin_password = args.admin_password
+
     storage_path.mkdir(exist_ok=True, parents=True)
     chunk_path.mkdir(exist_ok=True, parents=True)
     thumbnail_path.mkdir(exist_ok=True, parents=True)
     reported_path.mkdir(exist_ok=True, parents=True)
 
     print(
-f"""Timeout: {int(dropzone_timeout) // 1000} seconds per chunk
+        f"""Timeout: {int(dropzone_timeout) // 1000} seconds per chunk
 Chunk Size: {int(dropzone_chunk_size) // 1024} Kb
 Max File Size: {int(dropzone_max_file_size)} Mb
 Force Chunking: {dropzone_force_chunking}
@@ -359,6 +519,7 @@ Storage Path: {storage_path.absolute()}
 Chunk Path: {chunk_path.absolute()}
 Thumbnail Path: {thumbnail_path.absolute()}
 Reported Path: {reported_path.absolute()}
+Deleted Path: {deleted_path.absolute()}
 Allow Downloads: {allow_downloads}
 Allow Deletes: {allow_deletes}
 """
