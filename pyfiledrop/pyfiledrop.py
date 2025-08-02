@@ -15,12 +15,12 @@ import uuid
 import string
 import base64
 import json
+import math
 
 from bottle import route, run, request, error, HTTPError, static_file, HTTPResponse, template
 import jwt
 from werkzeug.utils import secure_filename
 from PIL import Image
-import pillow_avif  # Required for thumbnails, do not delete
 
 storage_path: Path = Path(__file__).parent.parent / "storage"
 chunk_path: Path = Path(__file__).parent.parent / "chunk"
@@ -29,9 +29,10 @@ reported_path: Path = Path(__file__).parent.parent / "reported"
 deleted_path: Path = Path(__file__).parent.parent / "deleted"
 deleted_path.mkdir(exist_ok=True, parents=True)
 
-site_name = "CDGriffith Photography File Drop"
+site_name = "File Drop"
 allow_downloads = True
 allow_deletes = False
+allow_viewing = True
 admin_password = ""  # Will be set via command line argument
 dropzone_cdn = "https://cdnjs.cloudflare.com/ajax/libs/dropzone"
 dropzone_version = "5.9.3"
@@ -40,7 +41,7 @@ dropzone_max_file_size = "100000"
 dropzone_chunk_size = "1000000"
 dropzone_parallel_chunks = "true"
 dropzone_force_chunking = "true"
-dropzone_accepted_files = "image/*,.psd,video/*,.mp4,.mkv"
+dropzone_accepted_files = "image/*,.psd,video/*,.mp4,.mkv,.pdf,.zip,.tar.gz,.rar,.7z"
 
 lock = Lock()
 chucks = defaultdict(list)
@@ -95,6 +96,7 @@ def index():
         site_name=site_name,
         dropzone_cdn=dropzone_cdn.rstrip("/"),
         dropzone_version=dropzone_version,
+        allow_viewing="true" if allow_viewing else "false",
         allow_downloads="true" if allow_downloads else "false",
         dropzone_force_chunking=dropzone_force_chunking,
         dropzone_parallel_chunks=dropzone_parallel_chunks,
@@ -276,7 +278,7 @@ def check_admin_password():
 def upload():
     token = request.get_header("token")
     if not token:
-        print(f"Client did not send a token header")
+        print("Client did not send a token header")
         raise HTTPError(status=403)
     try:
         jwt_payload = jwt.decode(jwt=token, key=secret, algorithms=["HS256"])
@@ -301,7 +303,7 @@ def upload():
     except KeyError as err:
         raise HTTPError(status=400, body=f"Not all required fields supplied, missing {err}")
     except ValueError:
-        raise HTTPError(status=400, body=f"Values provided were not in expected format")
+        raise HTTPError(status=400, body="Values provided were not in expected format")
 
     if current_chunk == 0:
         save_ip(client_ip, dz_uuid)
@@ -378,6 +380,84 @@ def thumbnail(dz_uuid):
             return HTTPError(status=404)
         return static_file(default_thumb.name, root=default_thumb.parent, mimetype="image/avif")
     return static_file(file.name, root=file.parent, mimetype="image/avif")
+
+
+@route("/media/<dz_uuid>")
+def media(dz_uuid):
+    import puremagic
+
+    if not allow_viewing:
+        raise HTTPError(status=403)
+    for file in storage_path.iterdir():
+        if file.is_file() and file.name.startswith(dz_uuid):
+            try:
+                return static_file(
+                    file.name, root=file.parent.absolute(), mimetype=puremagic.magic_file(file)[0].mime_type
+                )
+            except puremagic.PureError:
+                return static_file(file.name, root=file.parent.absolute())
+    return HTTPError(status=404)
+
+
+def format_bytes(bytes_value, decimals=2):
+    """Format bytes to human-readable string"""
+    if bytes_value == 0:
+        return "0 Bytes"
+    k = 1024
+    dm = decimals
+    sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+    i = int(math.log(bytes_value) / math.log(k))
+    return f"{round(bytes_value / (k**i), dm)} {sizes[i]}"
+
+
+@route("/view/<dz_uuid>")
+def view(dz_uuid):
+    if not allow_viewing:
+        raise HTTPError(status=403)
+
+    file_found = None
+    for file in storage_path.iterdir():
+        if file.is_file() and file.name.startswith(dz_uuid):
+            file_found = file
+            break
+
+    if not file_found:
+        return HTTPError(status=404)
+
+    filename = file_found.name.split("_", 1)[1] if "_" in file_found.name else file_found.name
+    file_size = file_found.stat().st_size
+    size = format_bytes(file_size)
+
+    # Determine file type
+    lower_filename = filename.lower()
+    is_image = any(lower_filename.endswith(ext) for ext in pillow_image_types)
+    is_video = any(lower_filename.endswith(ext) for ext in (".mp4", ".webm", ".mkv", ".avi", ".mov"))
+    is_other = not (is_image or is_video)
+
+    # Determine MIME type for videos
+    mime_type = ""
+    if is_video:
+        if lower_filename.endswith(".mp4"):
+            mime_type = "video/mp4"
+        elif lower_filename.endswith(".webm"):
+            mime_type = "video/webm"
+        elif lower_filename.endswith((".mkv", ".avi", ".mov")):
+            mime_type = "video/mp4"  # Default to mp4 for other formats
+
+    view_file = Path(__file__).parent / "view.html"
+    return template(
+        view_file.read_text(),
+        site_name=site_name,
+        filename=filename,
+        uuid=dz_uuid,
+        size=size,
+        is_image=is_image,
+        is_video=is_video,
+        is_other=is_other,
+        mime_type=mime_type,
+        allow_downloads=allow_downloads,
+        allow_deletes=allow_deletes,
+    )
 
 
 @route("/report", method="POST")
@@ -471,7 +551,6 @@ def yes_or_no(arg):
 
 
 if __name__ == "__main__":
-
     args = parse_args()
     storage_path = Path(args.storage)
     chunk_path = Path(args.chunks)
@@ -524,4 +603,4 @@ Allow Downloads: {allow_downloads}
 Allow Deletes: {allow_deletes}
 """
     )
-    run(server="paste", port=args.port, host=args.host)
+    run(server="waitress", port=args.port, host=args.host)

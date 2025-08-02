@@ -76,6 +76,24 @@
         #uploaded {
             min-height: 200px;
         }
+   .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+
+        .modal-content {
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            width: 10%; /* Could be more or less, depending on screen size */
+        }
+
 
     </style>
     <!-- Dropzone Javascript -->
@@ -179,8 +197,8 @@
     }
 
     function generateLink(data) {
-        if ("{{allow_downloads}}".toLocaleLowerCase() === 'true') {
-            return `<a href="/download/${data.uuid}" download="${data.filename}">${data.filename}</a>`;
+        if ("{{allow_viewing}}".toLocaleLowerCase() === 'true') {
+            return `<a href="/view/${data.uuid}">${data.filename}</a>`;
         }
         return data.filename;
     }
@@ -285,12 +303,14 @@
         const results = read_cookie();
         let content = "";
         if ("{{allow_deletes}}".toLocaleLowerCase() === 'true') {
-            content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td><td>Delete</td></thead>";
+            content = "<table><thead><td></td><td></td><td>Filename</td><td>UUID</td><td>Size</td><td>Delete</td></thead>";
         } else {
-            content = "<table><thead><td></td><td>Filename</td><td>UUID</td><td>Size</td></thead>";
+            content = "<table><thead><td></td><td></td><td>Filename</td><td>UUID</td><td>Size</td></thead>";
         }
         for (let i = 0; i < results.length; i++) {
-            content += `<tr><td><img alt="" src="/thumbnail/${results[i].uuid}.avif" style="max-width: 64px; max-height: 64px"/></td>`
+            content += `<tr>`;
+            content += `<td><button onclick="copyToClipboard('${getBaseURL()}/view/${results[i].uuid}')" >Share</button></td>`;
+            content += `<td><img alt="" src="/thumbnail/${results[i].uuid}.avif" style="max-width: 64px; max-height: 64px"/></td>`
             content += `<td style="word-break: break-all; max-width: 220px">${generateLink(results[i])}</td>`;
             content += `<td style="word-break: break-all; max-width: 220px">${results[i].uuid}</td>`;
             // content += `<td style="word-break: break-all; max-width: 180px">${results[i].sha3_256}</td>`;
@@ -303,6 +323,21 @@
         content += "</table>";
         document.getElementById("uploaded").innerHTML = content;
     }
+
+    function getBaseURL() {
+    const protocol = window.location.protocol; // e.g., "http:" or "https:"
+    const hostname = window.location.hostname;   // e.g., "mememe.com" or "youyou.com"
+    const port     = window.location.port;      // e.g., "8080" (if not default 80 for http or 443 for https)
+
+    let baseURL = protocol + "//" + hostname;
+
+    if (port && ((protocol === "http:" && port !== "80") || (protocol === "https:" && port !== "443"))) {
+        baseURL += ":" + port;
+    }
+
+    return baseURL;
+}
+
 
     function init() {
         setTimeout(function () {
@@ -350,5 +385,29 @@
     init();
 
 </script>
+<script type="application/javascript">
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCopiedModal();
+        }, (err) => {
+            console.error('Failed to copy text: ', err);
+        });
+    }
+
+    function showCopiedModal() {
+        var modal = document.getElementById("copied-modal");
+        modal.style.display = "block";
+        setTimeout(function() {
+            modal.style.display = "none";
+        }, 1000); // Hide the modal after 1 second
+    }
+</script>
+
+<div id="copied-modal" class="modal">
+    <div class="modal-content">
+        <p>Link Copied!</p>
+    </div>
+</div>
+
 </body>
 </html>

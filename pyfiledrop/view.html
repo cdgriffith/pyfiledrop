@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <!-- CSS Reset -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.css">
+    <!-- Milligram CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.css">
+    <style>
+        html, body {
+            overflow-y: auto;
+            height: 100%;
+            margin: 0;
+            color: #9ba0a5;
+            background-color: #222;
+        }
+
+        input, select, textarea{
+            color: #9ba0a5;
+        }
+
+        .navigation {
+            margin-top: 10px;
+            height: 100px;
+        }
+
+        .navigation_list {
+            padding: 20px 10px;
+            text-align: center;
+        }
+
+        .navigation_item {
+            display: inline;
+            list-style: none;
+            margin: 0 20px;
+        }
+
+        .title {
+            display: inline;
+        }
+
+        #media_container {
+            height: 100%;
+            text-align: center;
+        }
+
+        .media-content {
+            max-width: 100%;
+            max-height: 80vh;
+            margin: 0 auto;
+            display: block;
+        }
+
+        video.media-content {
+            max-height: 80vh;
+        }
+
+        footer {
+            width: 100%;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .file-info {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .actions {
+            margin-top: 20px;
+        }
+    </style>
+    <title>{{site_name}} - View Media</title>
+</head>
+<body>
+<main class="wrapper">
+    <nav class="navigation">
+        <section class="container">
+            <a href="/"><h1 class="title">{{site_name}}</h1></a>
+            <ul class="navigation_list float-right">
+                <li class="navigation_item"><a href="/">Back to Upload</a></li>
+            </ul>
+        </section>
+    </nav>
+
+    <section id="media_container" class="container">
+        <h2>{{filename}}</h2>
+        
+        <div class="file-info">
+            <p>UUID: {{uuid}}</p>
+            <p>Size: {{size}}</p>
+        </div>
+
+        % if is_image:
+        <img src="/media/{{uuid}}" alt="{{filename}}" class="media-content">
+        % end
+        % if is_video:
+        <video controls class="media-content">
+            <source src="/media/{{uuid}}" type="{{mime_type}}">
+            Your browser does not support the video tag.
+        </video>
+        % end
+        % if not is_image and not is_video:
+        <p>This file type cannot be previewed. <a href="/download/{{uuid}}" download="{{filename}}">Download</a> to view.</p>
+        % end
+
+        <div class="actions">
+            % if allow_downloads:
+            <a href="/download/{{uuid}}" download="{{filename}}" class="button">Download</a>
+            % end
+        </div>
+    </section>
+</main>
+<script type="application/javascript">
+    function deleteItem(uuid) {
+        if (confirm("Are you sure you want to delete this file?")) {
+            fetch(`/delete/${uuid}`, {
+                method: 'post',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            }).then(function (response) {
+                if (response.ok) {
+                    window.location.href = "/";
+                } else {
+                    response.text().then(function (text) {
+                        alert(text);
+                    });
+                }
+            });
+        }
+    }
+</script>
+</body>
+</html>

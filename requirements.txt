@@ -1,6 +1,0 @@
-bottle>=0.13
-paste
-pillow
-pillow-avif-plugin
-pyjwt
-werkzeug
